@@ -148,17 +148,18 @@ html[data-mode="light"] {
 /* ---- ACCENT: primary color ---- */
 
 :root,
+html[data-theme="uptryx"],
 html[data-theme="violet"] {
-  --primary: oklch(0.526 0.247 293);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.6 0.22 293);
-  --primary-soft: oklch(0.526 0.247 293 / 0.12);
-  --primary-soft-2: oklch(0.526 0.247 293 / 0.2);
-  --ring: oklch(0.526 0.247 293);
-  --chart-1: oklch(0.526 0.247 293);
-  --sidebar-primary: oklch(0.526 0.247 293);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.526 0.247 293);
+  --primary: oklch(0.688 0.143 166);
+  --primary-foreground: oklch(0.14 0.02 166);
+  --primary-hover: oklch(0.74 0.14 166);
+  --primary-soft: oklch(0.688 0.143 166 / 0.12);
+  --primary-soft-2: oklch(0.688 0.143 166 / 0.22);
+  --ring: oklch(0.688 0.143 166);
+  --chart-1: oklch(0.688 0.143 166);
+  --sidebar-primary: oklch(0.688 0.143 166);
+  --sidebar-primary-foreground: oklch(0.14 0.02 166);
+  --sidebar-ring: oklch(0.688 0.143 166);
 }
 
 html[data-theme="emerald"] {

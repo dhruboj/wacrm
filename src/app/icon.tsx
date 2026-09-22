@@ -22,7 +22,7 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#7c3aed", // primary (Hostinger-aligned purple)
+          background: "#00B686", // Uptryx primary green
           borderRadius: 6,
         }}
       >
@@ -31,12 +31,12 @@ export default function Icon() {
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#ffffff"
-          strokeWidth="2.5"
+          stroke="#02140e"
+          strokeWidth="3.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path d="M6 5v8a6 6 0 0 0 12 0V5" />
         </svg>
       </div>
     ),
