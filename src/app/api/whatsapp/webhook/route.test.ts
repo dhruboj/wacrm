@@ -41,6 +41,8 @@ const h = vi.hoisted(() => ({
     broadcastRecipient: null as { id: string; status: string } | null,
     /** Patches applied to that broadcast_recipients row. */
     recipientUpdates: [] as Record<string, unknown>[],
+    /** transactional_message_log updates: patch + the forward-only guard. */
+    transactionalLogUpdates: [] as { patch: Record<string, unknown>; wamid: unknown; from: unknown }[],
   },
 }))
 
@@ -88,6 +90,18 @@ vi.mock('@supabase/supabase-js', () => ({
                       }),
                   }),
                 }),
+              }),
+            }),
+          }
+        case 'transactional_message_log':
+          // handleStatusUpdate: update().eq(wamid).in(status, forward-from)
+          return {
+            update: (patch: Record<string, unknown>) => ({
+              eq: (_c: string, wamid: unknown) => ({
+                in: (_c2: string, from: unknown) => {
+                  h.state.transactionalLogUpdates.push({ patch, wamid, from })
+                  return Promise.resolve({ error: null })
+                },
               }),
             }),
           }
@@ -379,6 +393,7 @@ beforeEach(() => {
   h.state.messageUpdates = []
   h.state.broadcastRecipient = null
   h.state.recipientUpdates = []
+  h.state.transactionalLogUpdates = []
   mockFindExistingContact.mockResolvedValue({
     id: 'contact-1',
     name: 'Ada',
@@ -1010,5 +1025,41 @@ describe('status webhook: failed statuses keep Meta\'s reason (#535)', () => {
     expect(h.state.recipientUpdates).toHaveLength(1)
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_message')
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_code')
+  })
+})
+
+describe('status webhook: transactional_message_log (migration 043)', () => {
+  it('moves a transactional log row forward on delivered', async () => {
+    await runStatusWebhook({ id: 'wamid.OTP1', status: 'delivered', timestamp: '1700000100', recipient_id: '919876543210' })
+    expect(h.state.transactionalLogUpdates).toHaveLength(1)
+    const u = h.state.transactionalLogUpdates[0]
+    expect(u.wamid).toBe('wamid.OTP1')
+    expect(u.from).toEqual(['sent'])
+    expect(u.patch.status).toBe('delivered')
+    expect(u.patch).not.toHaveProperty('error_code')
+  })
+
+  it('read can follow sent or delivered; failed records the code only', async () => {
+    await runStatusWebhook({ id: 'wamid.OTP2', status: 'read', timestamp: '1700000100', recipient_id: '919876543210' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runStatusWebhook({
+        id: 'wamid.OTP3', status: 'failed', timestamp: '1700000100', recipient_id: '919876543210',
+        errors: [{ code: 131026, title: 'Message undeliverable', error_data: { details: 'x' } }],
+      })
+    } finally {
+      warn.mockRestore()
+    }
+    const read = h.state.transactionalLogUpdates.find((u) => u.wamid === 'wamid.OTP2')!
+    const failed = h.state.transactionalLogUpdates.find((u) => u.wamid === 'wamid.OTP3')!
+    expect(read.from).toEqual(['sent', 'delivered'])
+    expect(failed.from).toEqual(['sent', 'delivered'])
+    expect(failed.patch).toMatchObject({ status: 'failed', error_code: '131026' })
+    expect(Object.keys(failed.patch).sort()).toEqual(['error_code', 'status', 'updated_at'])
+  })
+
+  it('ignores a "sent" status (the row starts as sent)', async () => {
+    await runStatusWebhook({ id: 'wamid.OTP4', status: 'sent', timestamp: '1700000100', recipient_id: '919876543210' })
+    expect(h.state.transactionalLogUpdates).toEqual([])
   })
 })

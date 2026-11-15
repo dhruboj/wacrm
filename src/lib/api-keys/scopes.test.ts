@@ -4,8 +4,7 @@ import {
   SCOPE_DESCRIPTIONS,
   hasScope,
   isApiScope,
-  normalizeScopes,
-} from './scopes';
+  normalizeScopes, isTransactionalTemplateAllowed } from './scopes';
 
 describe('isApiScope', () => {
   it('accepts every declared scope', () => {
@@ -59,5 +58,18 @@ describe('SCOPE_DESCRIPTIONS', () => {
     for (const s of API_SCOPES) {
       expect(SCOPE_DESCRIPTIONS[s]).toBeTruthy();
     }
+  });
+});
+
+describe('messages:send_transactional', () => {
+  it('is a known scope that keys can be minted with', () => {
+    expect(normalizeScopes(['messages:send_transactional'])).toEqual(['messages:send_transactional']);
+  });
+  it('does not grant messages:send', () => {
+    expect(hasScope(['messages:send_transactional'], 'messages:send')).toBe(false);
+  });
+  it('allows only allow-listed templates', () => {
+    expect(isTransactionalTemplateAllowed('curio_verify_code')).toBe(true);
+    expect(isTransactionalTemplateAllowed('payment_received')).toBe(false);
   });
 });
