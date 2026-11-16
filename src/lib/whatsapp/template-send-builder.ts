@@ -49,6 +49,14 @@ export interface SendTimeParams {
    * override at send time.
    */
   buttonParams?: Record<number, string>;
+  /**
+   * One-time code for an AUTHENTICATION template. Sent as the body
+   * {{1}} (when no body values are given) and as the OTP button's
+   * url parameter, which Meta requires for copy-code / one-tap
+   * buttons. Handled in sendTemplateMessage, independent of the
+   * template row (template sync does not store OTP buttons).
+   */
+  otp?: string;
 }
 
 export type MetaSendComponent =

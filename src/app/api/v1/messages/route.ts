@@ -7,8 +7,10 @@
 // has — resolves-or-creates the contact + conversation, then runs the
 // same shared send core.
 //
-// Auth: API key with the `messages:send` scope. Account context (and
-// the service-role client) come from `requireApiKey`.
+// Auth: API key with the `messages:send` scope, or with
+// `messages:send_transactional`, which may ONLY make transactional
+// sends of allow-listed Authentication templates (one-time codes).
+// Account context (and the service-role client) come from `requireApiKey`.
 //
 // Body:
 //   {
@@ -23,15 +25,23 @@
 //       "params": ["A123"] | { "body": [...] }   // array = positional body; object = structured
 //     },
 //     "reply_to_message_id": "<uuid>",       // optional, must be in the same conversation
-//     "name": "Jane Doe"                     // optional, names a newly-created contact
+//     "name": "Jane Doe",                    // optional, names a newly-created contact
+//     "transactional": true                  // optional, templates only: send without
+//                                            // creating a contact/conversation or storing
+//                                            // the message (one-time codes)
 //   }
+//
+// Authentication templates: pass the code as template.params.otp
+// ({ "otp": "123456" }); it fills the body {{1}} and the OTP button.
 //
 // Response (201):
 //   { "data": { "message_id", "whatsapp_message_id", "conversation_id",
 //               "contact_id", "contact_created" } }
+//   transactional: { "data": { "whatsapp_message_id", "transactional": true } }
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context';
+import { hasScope, isTransactionalTemplateAllowed } from '@/lib/api-keys/scopes';
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
 import {
@@ -40,10 +50,19 @@ import {
   SendMessageError,
 } from '@/lib/whatsapp/send-message';
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive';
+import { sendTransactionalTemplate } from '@/lib/whatsapp/send-transactional';
 
 export async function POST(request: Request) {
   try {
-    const ctx = await requireApiKey(request, 'messages:send');
+    // Scope is checked below: either messages:send (full) or
+    // messages:send_transactional (codes only).
+    const ctx = await requireApiKey(request);
+    const fullSend = hasScope(ctx.scopes, 'messages:send');
+    const transactionalOnly =
+      !fullSend && hasScope(ctx.scopes, 'messages:send_transactional');
+    if (!fullSend && !transactionalOnly) {
+      return fail('forbidden', "This API key is missing the 'messages:send' scope", 403);
+    }
 
     const body = (await request.json().catch(() => null)) as Record<
       string,
@@ -59,6 +78,25 @@ export async function POST(request: Request) {
     }
 
     const type = typeof body.type === 'string' ? body.type : 'text';
+
+    if (transactionalOnly) {
+      const name =
+        body.template && typeof body.template === 'object'
+          ? (body.template as Record<string, unknown>).name
+          : undefined;
+      if (
+        body.transactional !== true ||
+        type !== 'template' ||
+        typeof name !== 'string' ||
+        !isTransactionalTemplateAllowed(name)
+      ) {
+        return fail(
+          'forbidden',
+          'This API key can only send allow-listed one-time-code templates with "transactional": true',
+          403
+        );
+      }
+    }
 
     // Unpack the optional `template` object into the flat params the
     // send core expects. `params` as an array → legacy positional body
@@ -94,6 +132,25 @@ export async function POST(request: Request) {
       templateName: typeof template?.name === 'string' ? template.name : null,
       interactivePayload,
     });
+
+    // Transactional: send the template only — no contact, no
+    // conversation, nothing stored.
+    if (body.transactional === true) {
+      if (type !== 'template') {
+        return fail('bad_request', "'transactional' is only supported for template messages", 400);
+      }
+      const sent = await sendTransactionalTemplate(ctx.supabase, ctx.accountId, {
+        apiKeyId: ctx.keyId,
+        // Codes-only keys may send Authentication-category templates only.
+        requireAuthenticationCategory: transactionalOnly,
+        to,
+        templateName: template!.name as string,
+        templateLanguage: typeof template?.language === 'string' ? template.language : null,
+        templateParams,
+        templateMessageParams,
+      });
+      return ok({ whatsapp_message_id: sent.whatsappMessageId, transactional: true }, 201);
+    }
 
     // Find-or-create the conversation for this phone, then send. Both
     // steps share `SendMessageError`, so one catch maps the whole

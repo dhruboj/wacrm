@@ -454,6 +454,32 @@ async function handleStatusUpdate(status: {
     console.error('Error updating message status:', msgErr)
   }
 
+  // 1b) Mirror onto transactional_message_log (migration 043): one-time
+  //     codes sent with "transactional": true have no messages row. Only
+  //     moves forward (sent → delivered → read; failed from sent or
+  //     delivered), so an out-of-order webhook can't downgrade a row.
+  const forwardFrom: Record<string, string[]> = {
+    delivered: ['sent'],
+    read: ['sent', 'delivered'],
+    failed: ['sent', 'delivered'],
+  }
+  const fromStatuses = forwardFrom[status.status]
+  if (fromStatuses) {
+    const logUpdate: Record<string, unknown> = {
+      status: status.status,
+      updated_at: new Date().toISOString(),
+    }
+    if (failure) logUpdate.error_code = String(failure.code).slice(0, 32)
+    const { error: logErr } = await supabaseAdmin()
+      .from('transactional_message_log')
+      .update(logUpdate)
+      .eq('whatsapp_message_id', status.id)
+      .in('status', fromStatuses)
+    if (logErr) {
+      console.error('Error updating transactional log status:', logErr.message)
+    }
+  }
+
   // Webhook fan-out for this status change happens at the END of this
   // handler (after the broadcast mirror below), so a slow subscriber
   // endpoint can't delay the broadcast_recipients update.

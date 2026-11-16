@@ -517,11 +517,16 @@ export async function sendTemplateMessage(
     language: { code: language },
   }
 
+  const otp = typeof messageParams?.otp === 'string' ? messageParams.otp.trim() : ''
+  // Authentication templates take the code as the body variable too.
+  const bodyValues =
+    messageParams?.body ?? (params && params.length > 0 ? params : otp ? [otp] : params)
+
   if (template) {
     const components = buildSendComponents(template, {
       // Legacy callers pass body values in `params`; fold them into
       // `messageParams.body` so the new path covers them too.
-      body: messageParams?.body ?? params,
+      body: bodyValues,
       headerText: messageParams?.headerText,
       headerMediaUrl: messageParams?.headerMediaUrl,
       headerMediaId: messageParams?.headerMediaId,
@@ -530,14 +535,28 @@ export async function sendTemplateMessage(
     if (components.length > 0) {
       templatePayload.components = components
     }
-  } else if (params && params.length > 0) {
+  } else if (bodyValues && bodyValues.length > 0) {
     // Legacy body-only path — no template row available.
     templatePayload.components = [
       {
         type: 'body',
-        parameters: params.map((p) => ({ type: 'text', text: String(p) })),
+        parameters: bodyValues.map((p) => ({ type: 'text', text: String(p) })),
       },
     ]
+  }
+
+  // AUTHENTICATION templates: Meta requires the code as the OTP button's
+  // url parameter (copy-code and one-tap). Auth templates have exactly
+  // one button, at index 0.
+  if (otp) {
+    const components = (templatePayload.components as unknown[] | undefined) ?? []
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [{ type: 'text', text: otp }],
+    })
+    templatePayload.components = components
   }
 
   const body: Record<string, unknown> = {

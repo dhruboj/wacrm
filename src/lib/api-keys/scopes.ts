@@ -15,6 +15,7 @@
 
 export const API_SCOPES = [
   'messages:send',
+  'messages:send_transactional',
   'messages:read',
   'contacts:read',
   'contacts:write',
@@ -28,6 +29,8 @@ export type ApiScope = (typeof API_SCOPES)[number];
 /** Human-readable descriptions, surfaced in the key-creation UI. */
 export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'messages:send': 'Send WhatsApp messages',
+  'messages:send_transactional':
+    'Send one-time codes only (allowed Authentication templates, no contact created)',
   'messages:read': 'Read messages and their delivery status',
   'contacts:read': 'List and read contacts',
   'contacts:write': 'Create and update contacts',
@@ -35,6 +38,18 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'broadcasts:send': 'Launch broadcast campaigns',
   'webhooks:manage': 'Register and manage outbound event webhooks',
 };
+
+/**
+ * Templates a key with only `messages:send_transactional` may send.
+ * They must also be Authentication-category templates (checked at
+ * send time against the synced template row). Keys with
+ * `messages:send` are not limited by this list.
+ */
+export const TRANSACTIONAL_TEMPLATE_ALLOWLIST: readonly string[] = ['curio_verify_code'];
+
+export function isTransactionalTemplateAllowed(name: string): boolean {
+  return TRANSACTIONAL_TEMPLATE_ALLOWLIST.includes(name);
+}
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */
 export function isApiScope(value: unknown): value is ApiScope {
