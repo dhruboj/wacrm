@@ -275,3 +275,34 @@ describe('buildSendComponents — end-to-end mix', () => {
     expect((components[2] as { index: string }).index).toBe('1');
   });
 });
+
+describe('buildSendComponents — otp', () => {
+  const otpUrl = 'https://www.whatsapp.com/otp/code/?otp_type=COPY_CODE&code=otp{{1}}';
+
+  it('fills a variable URL button with the otp when no buttonParams value is given', () => {
+    const components = buildSendComponents(
+      row({ category: 'Authentication', body_text: '*{{1}}* is your verification code.', buttons: [{ type: 'URL', text: 'Copy code', url: otpUrl }] }),
+      { body: ['482913'], otp: '482913' },
+    );
+    expect(components).toEqual([
+      { type: 'body', parameters: [{ type: 'text', text: '482913' }] },
+      { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: '482913' }] },
+    ]);
+  });
+
+  it('an explicit buttonParams value wins over the otp', () => {
+    const components = buildSendComponents(
+      row({ buttons: [{ type: 'URL', text: 'Copy code', url: otpUrl }] }),
+      { otp: '482913', buttonParams: { 0: 'other' } },
+    );
+    expect(components).toEqual([
+      { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: 'other' }] },
+    ]);
+  });
+
+  it('still throws for a variable URL button with neither otp nor buttonParams', () => {
+    expect(() =>
+      buildSendComponents(row({ buttons: [{ type: 'URL', text: 'Track', url: 'https://x.example/{{1}}' }] })),
+    ).toThrow(/buttonParams\[0\]/);
+  });
+});

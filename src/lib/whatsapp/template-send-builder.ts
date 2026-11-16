@@ -53,8 +53,10 @@ export interface SendTimeParams {
    * One-time code for an AUTHENTICATION template. Sent as the body
    * {{1}} (when no body values are given) and as the OTP button's
    * url parameter, which Meta requires for copy-code / one-tap
-   * buttons. Handled in sendTemplateMessage, independent of the
-   * template row (template sync does not store OTP buttons).
+   * buttons. Meta lists the OTP button as a URL button whose url
+   * ends in `{{1}}`, so once synced it is stored as one: here it fills
+   * any variable URL button that has no explicit buttonParams value.
+   * sendTemplateMessage adds the button itself when the row has none.
    */
   otp?: string;
 }
@@ -234,8 +236,12 @@ export function buildSendComponents(
   const body = buildBodyComponent(template, params);
   if (body) out.push(body);
   if (template.buttons?.length) {
+    const otp = params.otp?.trim() || undefined;
     template.buttons.forEach((btn, i) => {
-      const override = params.buttonParams?.[i];
+      let override = params.buttonParams?.[i];
+      if (override === undefined && otp && btn.type === 'URL' && extractVariableIndices(btn.url).length > 0) {
+        override = otp;
+      }
       const component = buildButtonComponent(btn, i, override);
       if (component) out.push(component);
     });
