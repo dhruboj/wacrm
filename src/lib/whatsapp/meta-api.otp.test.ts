@@ -41,6 +41,20 @@ describe("sendTemplateMessage — authentication otp", () => {
     expect(sent.template.components).toHaveLength(2);
   });
 
+  it("fills the synced OTP url button once (row stored with the button)", async () => {
+    // Meta lists the copy-code button as a URL button ending in {{1}};
+    // "Sync from Meta" stores it that way.
+    const syncedRow = {
+      ...authRow,
+      buttons: [{ type: "URL", text: "Copy code", url: "https://www.whatsapp.com/otp/code/?otp_type=COPY_CODE&code=otp{{1}}" }],
+    } as unknown as MessageTemplate;
+    await sendTemplateMessage({ ...BASE, template: syncedRow, messageParams: { otp: "482913" } });
+    expect(sent.template.components).toEqual([
+      { type: "body", parameters: [{ type: "text", text: "482913" }] },
+      otpButton,
+    ]);
+  });
+
   it("leaves non-otp sends unchanged", async () => {
     await sendTemplateMessage({ ...BASE, params: ["A123"] });
     expect(sent.template.components).toEqual([{ type: "body", parameters: [{ type: "text", text: "A123" }] }]);

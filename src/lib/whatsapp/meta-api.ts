@@ -531,6 +531,7 @@ export async function sendTemplateMessage(
       headerMediaUrl: messageParams?.headerMediaUrl,
       headerMediaId: messageParams?.headerMediaId,
       buttonParams: messageParams?.buttonParams,
+      otp: otp || undefined,
     })
     if (components.length > 0) {
       templatePayload.components = components
@@ -547,15 +548,19 @@ export async function sendTemplateMessage(
 
   // AUTHENTICATION templates: Meta requires the code as the OTP button's
   // url parameter (copy-code and one-tap). Auth templates have exactly
-  // one button, at index 0.
+  // one button, at index 0. A synced row already carries it (as a URL
+  // button the builder filled with the code); add it only when missing.
   if (otp) {
-    const components = (templatePayload.components as unknown[] | undefined) ?? []
-    components.push({
-      type: 'button',
-      sub_type: 'url',
-      index: '0',
-      parameters: [{ type: 'text', text: otp }],
-    })
+    const components = (templatePayload.components as Array<{ type?: string; index?: string }> | undefined) ?? []
+    const hasButton0 = components.some((c) => c.type === 'button' && c.index === '0')
+    if (!hasButton0) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: otp }],
+      } as { type: string; index: string })
+    }
     templatePayload.components = components
   }
 
